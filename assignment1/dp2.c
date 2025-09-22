@@ -8,8 +8,8 @@ void init(long N, float **pA, float **pB) {
 
 	srand(time(NULL));
 	for (int i = 0; i < N; i++) {
-		(*pA)[i] = (float)rand();
-		(*pB)[i] = (float)rand();
+		(*pA)[i] = 1.0f;
+		(*pB)[i] = 1.0f;
 	}
 
 }
@@ -39,6 +39,7 @@ void evaluate(int N, int reps) {
 	init(N, &pA, &pB);
 
     float average_exe_time = 0.0f;
+    float res = 0.0f;
 
     struct timespec start, end;
 
@@ -47,7 +48,7 @@ void evaluate(int N, int reps) {
         clock_gettime(CLOCK_MONOTONIC, &start);
 
 	    //dp(N, pA, pB);
-        dpunroll(N, pA, pB);
+        res = dpunroll(N, pA, pB);
 
         clock_gettime(CLOCK_MONOTONIC, &end);
         
@@ -59,15 +60,16 @@ void evaluate(int N, int reps) {
     float bandwidth = (float)8 * N / average_exe_time / 1e9;// GB/sec
     float throughput = (float)(2  * N) / average_exe_time;// FLOP/sec
 
+    printf("result: %f\n", res);
     printf("N %d <T>: %f sec B: %f GB/sec F: %f FLOP/sec \n", N, average_exe_time, bandwidth, throughput);
 
 	free(pA); free(pB);
 }
 
-int main() {
-	float *pA, *pB;
-	
-	evaluate(1000000, 1000);
-    evaluate(300000000, 20);
+int main(int argc, char* argv[]) {
+	int N = atoi(argv[1]);
+    int reps = atoi(argv[2]);
+
+	evaluate(N, reps);
 
 }

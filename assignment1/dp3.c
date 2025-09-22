@@ -45,6 +45,7 @@ void evaluate(int N, int reps) {
 	init(N, &pA, &pB);
 
     float average_exe_time = 0.0f;
+    float result = 0.0f;
 
     struct timespec start, end;
 
@@ -54,7 +55,7 @@ void evaluate(int N, int reps) {
 
 	    //dp(N, pA, pB);
         //dpunroll(N, pA, pB);
-        bdp(N, pA, pB);
+        result = bdp(N, pA, pB);
 
         clock_gettime(CLOCK_MONOTONIC, &end);
         
@@ -65,16 +66,16 @@ void evaluate(int N, int reps) {
     }
     float bandwidth = (float)8 * N / average_exe_time / 1e9;// GB/sec
     float throughput = (float)(2  * N) / average_exe_time;// FLOP/sec
-
+    printf("result: %f\n", result);
     printf("N %d <T>: %f sec B: %f GB/sec F: %f FLOP/sec \n", N, average_exe_time, bandwidth, throughput);
 
 	free(pA); free(pB);
 }
 
-int main() {
-	float *pA, *pB;
+int main(int argc, char *argv[]) {
+	int N = atoi(argv[1]);
+    int reps = atoi(argv[2]);
 	
-	evaluate(1000000, 1000);
-    evaluate(300000000, 20);
+	evaluate(N, reps);
 
 }
