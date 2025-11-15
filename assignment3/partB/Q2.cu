@@ -66,7 +66,8 @@ int main(int argc, char *argv[]) {
         }
         default: break;
     }
-
+    
+    cudaDeviceSynchronize();
     cudaMemcpy(c, c_device, byte_size, cudaMemcpyDeviceToHost);
 
     auto end = std::chrono::high_resolution_clock::now();
