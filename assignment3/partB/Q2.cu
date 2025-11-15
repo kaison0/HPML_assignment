@@ -25,8 +25,9 @@ __global__ void add_vec3(int* A, int* B, int* C, int size) {
 
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {    
     auto start = std::chrono::high_resolution_clock::now();
+    
     int k = 0;
     int method_id = 1;
 
@@ -54,14 +55,16 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(a_device, a, byte_size, cudaMemcpyHostToDevice);
     cudaMemcpy(b_device, b, byte_size, cudaMemcpyHostToDevice);
 
-    switch (method_id) {
-        case 1: add_vec1<<1, 1>>(a_device, b_device, c_device);break;
-        case 2: add_vec2<<1, 256>>(a_device, b_device, c_device);break;
+    switch (static_cast<int>(method_id)) {
+        case 1: add_vec1<<<1, 1>>>(a_device, b_device, c_device, k);break;
+        case 2: add_vec2<<<1, 256>>>(a_device, b_device, c_device, k);break;
         case 3: {
-            int block_num = (k + thread_num - 1) / thread_num;
-            add_vec<<<block_num, thread_num>>>(a_device, b_device, c_device, k);
+            int thread_num = 256;
+           int block_num = (k + thread_num - 1) / thread_num;
+            add_vec3<<<block_num, thread_num>>>(a_device, b_device, c_device, k);
             break;
         }
+        default: break;
     }
 
     cudaMemcpy(c, c_device, byte_size, cudaMemcpyDeviceToHost);
