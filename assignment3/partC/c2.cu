@@ -129,11 +129,10 @@ int main(int argc, char* argv[]) {
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "Block_size: (" << block_x << ", " << block_y << ", " << block_z << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
+    std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
 
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
     
-    if (verbose) {
     bool pass_test = true;
     for (int k = 0; k < K; k++) {
         for (int x = 0; x < W; x++)
@@ -144,7 +143,7 @@ int main(int argc, char* argv[]) {
                 }
     }
     std::cout << (pass_test ? "Test passed!" : "Test Failed (") << std::endl;
-    }
+    
 
 
     if (verbose) {

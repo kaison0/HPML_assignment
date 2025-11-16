@@ -19,9 +19,9 @@
 __global__ void compute_convolution(double* O, double* I, double* F) {
     int y = threadIdx.x + blockIdx.x * blockDim.x;
     int x = threadIdx.y + blockIdx.y * blockDim.y;
-    int k = threadIdx.z + blockIdx.z * blockDim.z;
+//    int k = threadIdx.z + blockIdx.z * blockDim.z;
 //    printf("%d %d %d\n", x, y, k);
-    //for (int k = 0; k < K; k++) {
+    for (int k = 0; k < K; k++) {
         double value = 0.0;
         for (int c = 0; c < C; c++) {
             for (int i = 0; i < FH; i++)
@@ -30,16 +30,15 @@ __global__ void compute_convolution(double* O, double* I, double* F) {
         }
 
         O[idx_O(k, x, y)] = value;
-    //}
+    }
 }
 
 int main(int argc, char* argv[]) {
     // one block is thread_num*thread_num
-    int block_x, block_y, block_z;
-    if (argc == 4) {
+    int block_x, block_y;
+    if (argc == 3) {
         block_x = std::stoi(argv[1]);
         block_y = std::stoi(argv[2]);
-        block_z = std::stoi(argv[3]);
     }
     double *I, *F, *O, *O_correct;
     long I_bytesize = (long)C*(H+2*P)*(W+2*P)* sizeof(double);
@@ -89,16 +88,19 @@ int main(int argc, char* argv[]) {
                             O_correct[idx_O(k, x, y)] += F[idx_F(k, c, FW - 1 - i, FH - 1 - j)] * I[idx_I(c, x + i, y + j)];
             }
     
-    auto start = std::chrono::high_resolution_clock::now();
 
-    dim3 dim_block(block_x, block_y, block_z);
-    dim3 dim_grid(H/block_x, W/block_y, K/block_z);
+    dim3 dim_block(block_x, block_y);
+    dim3 dim_grid(H/block_x, W/block_y);
+    compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device); 
+    cudaDeviceSynchronize();
+
+    auto start = std::chrono::high_resolution_clock::now();
     compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
     
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "Block_size: (" << block_x << ", " << block_y << ", " << block_z << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
+    std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
 
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
     
@@ -130,6 +132,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    long check_sum = 0, correct_sum = 0;
+    for (int k = 0; k < K; k++) {
+        for (int x = 0; x < W; x++)
+            for (int y = 0; y < H;y++) {
+                check_sum += O[idx_O(k, x, y)];
+                correct_sum += O_correct[idx_O(k, x, y)];
+            }
+    }
+    std::cout << "Check sum: " << check_sum << " correct_sum: " << correct_sum << std::endl;
     free(I);free(F);free(O);free(O_correct);
     cudaFree(I_device);cudaFree(F_device);cudaFree(O_device);
 }
