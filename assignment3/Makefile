@@ -30,6 +30,7 @@ tar:
 timer.o : timer.cu timer.h
 	${NVCC} $< -c -o $@ $(OPTIONS)
 
+# Q1 naive vector add 
 #######################################################################
 vecaddKernel00.o : vecaddKernel00.cu
 	${NVCC} $< -c -o $@ $(OPTIONS)
@@ -37,7 +38,7 @@ vecaddKernel00.o : vecaddKernel00.cu
 vecadd00 : vecadd.cu vecaddKernel.h vecaddKernel00.o timer.o
 	${NVCC} $< vecaddKernel00.o -o $@ $(LIB) timer.o $(OPTIONS)
 
-
+# Q2 vector add with coalescing version
 #######################################################################
 vecaddKernel01.o : vecaddKernel01.cu
 	${NVCC} $< -c -o $@ $(OPTIONS)
@@ -46,6 +47,7 @@ vecadd01 : vecadd.cu vecaddKernel.h vecaddKernel01.o timer.o
 	${NVCC} $< vecaddKernel01.o -o $@ $(LIB) timer.o $(OPTIONS)
 
 
+# Q3 matrix multiplication 
 #######################################################################
 ## Provided Kernel
 matmultKernel00.o : matmultKernel00.cu matmultKernel.h 
@@ -54,7 +56,7 @@ matmultKernel00.o : matmultKernel00.cu matmultKernel.h
 matmult00 : matmult.cu  matmultKernel.h matmultKernel00.o timer.o
 	${NVCC} $< matmultKernel00.o -o $@ $(LIB) timer.o $(OPTIONS)
 
-
+# Q4 matrix multiplication (Each thread handle 4 data)
 #######################################################################
 ## Expanded Kernel, notice that FOOTPRINT_SIZE is redefined (from 16 to 32)
 matmultKernel01.o : matmultKernel01.cu matmultKernel.h
