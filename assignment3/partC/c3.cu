@@ -1,4 +1,5 @@
 // @ym3121
+// cudnn v8.0+
 // Tile convolution kernel or not?
 #include <iostream>
 #include <cstdlib>
@@ -18,7 +19,7 @@
 #define block_y 16
 #define block_z 1 
 
-#define idx_I(c, x, y) ((c) * (H+2*P) * (W+2*P) + (x) * (W+2*P) + y)
+#define idx_I(c, x, y) ((c) * (H) * (W) + (x) * (W) + y)
 #define idx_F(k, c, i, j) ((k) * C * FH * FW + (c) * FH * FW + (i) * FW)
 #define idx_O(k, x, y) ((k) * H * W + (x) * W + y)
 
@@ -68,7 +69,7 @@ int main(int argc, char* argv[]) {
                         for (int i = 0; i < FW; i++)
                             O_correct[idx_O(k, x, y)] += F[idx_F(k, c, FW - 1 - i, FH - 1 - j)] * I[idx_I(c, x + i, y + j)];
             }
-   
+    printf("before cudnn");   
     cudnnHandle_t handle;
     cudnnCreate(&handle);
 
@@ -76,41 +77,47 @@ int main(int argc, char* argv[]) {
     cudnnFilterDescriptor_t filter_desc;
     cudnnConvolutionDescriptor_t conv_desc;
 
-    // Step 1: Set input, output, filter descriptors (use NCHW format)
     cudnnCreateTensorDescriptor(&input_desc);
     cudnnCreateTensorDescriptor(&output_desc);
     cudnnCreateFilterDescriptor(&filter_desc);
     cudnnCreateConvolutionDescriptor(&conv_desc);
 
-    // Initialize descriptors (example dimensions)
     cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_DOUBLE, 1, C, H, W);
     cudnnSetFilter4dDescriptor(filter_desc, CUDNN_DATA_DOUBLE, CUDNN_TENSOR_NCHW, K, C, FH, FW);
     cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_DOUBLE, 1, K, H, W);
     cudnnSetConvolution2dDescriptor(conv_desc, 1, 1, 1, 1, 1, 1, CUDNN_CONVOLUTION, CUDNN_DATA_DOUBLE);
 
-    // Step 2: Find the best convolution algorithm
-    int algo_count;
-    cudnnGetConvolutionForwardAlgorithmMaxCount(handle, &algo_count);
-    cudnnConvolutionFwdAlgo_t *algos = new cudnnConvolutionFwdAlgo_t[algo_count];
-    
-    cudnnConvolutionFwdAlgoPerf_t* perf_results = new cudnnConvolutionFwdAlgoPerf_t[algo_count];
-    cudnnFindConvolutionForwardAlgorithm(handle, input_desc, filter_desc, conv_desc, output_desc, algo_count, &algo_count, perf_results);
+    cudnnConvolutionFwdAlgoPerf_t perf_results[8];
+    int returned_algo_count = 0;
 
-    cudnnConvolutionFwdAlgo_t best_algo = perf_results[0].algo;
+    cudnnGetConvolutionForwardAlgorithm_v7(
+        handle,
+        input_desc,
+        filter_desc,
+        conv_desc,
+        output_desc,
+        8,
+        &returned_algo_count,
+        perf_results);
 
-    // Step 3: Query the workspace size for the chosen algorithm
-    size_t workspace_size;
-    cudnnGetConvolutionForwardWorkspaceSize(handle, input_desc, filter_desc, conv_desc, output_desc, best_algo, &workspace_size);
+    cudnnConvolutionFwdAlgo_t algo = perf_results[0].algo;
+    // ---------------------------------------------------
 
-    // Step 4: Allocate workspace memory
-    void *workspace;
-    cudaMalloc(&workspace, workspace_size);
+    size_t ws_size = 0;
+    cudnnGetConvolutionForwardWorkspaceSize(
+        handle, input_desc, filter_desc, conv_desc, output_desc,
+        algo,
+        &ws_size);
+   
+    void *d_workspace = nullptr;
+    printf("workspace size %d", ws_size);
+    cudaMalloc(&d_workspace, ws_size);
+
+    float alpha = 1.0f;
+    float beta  = 0.0f;
 
     auto start = std::chrono::high_resolution_clock::now();
-    // Step 5: Perform convolution using the selected algorithm
-    double alpha = 1.0, beta = 0.0;
-    cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algos[0], workspace, workspace_size, &beta, output_desc, O_device);
-
+    cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algo, d_workspace, ws_size, &beta, output_desc, O_device);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
     std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
@@ -122,6 +129,7 @@ int main(int argc, char* argv[]) {
         for (int x = 0; x < W; x++)
             for (int y = 0; y < H;y++)
                 if (std::fabs(O_correct[idx_O(k, x, y)] - O[idx_O(k, x, y)]) > 1e-6) {
+                    if (verbose)
                     std::cout << "Element (" << k << "," << x << "," << y << ") is wrong correct: " << O_correct[idx_O(k, x, y)] << " result: " << O[idx_O(k, x, y)] << std::endl;
                     pass_test = false;
                 }
@@ -158,7 +166,6 @@ int main(int argc, char* argv[]) {
     
     std::cout << " Check sum: " << check_sum << " Correct sum: " << correct_sum << std::endl;
     free(I);free(F);free(O);free(O_correct);
-    cudaFree(workspace);
-    cudnnDestroy(handle);
+    cudaFree(d_workspace);
     cudnnDestroy(handle);
 }
