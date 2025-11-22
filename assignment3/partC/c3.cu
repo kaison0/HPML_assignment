@@ -120,6 +120,7 @@ int main(int argc, char* argv[]) {
 
     double alpha = 1.0;
     double beta  = 0.0;
+    double average_time = 0.0;
  //   cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algo, d_workspace, ws_size, &beta, output_desc, O_device);
     for (int i = 0; i < 50; i++) {
         auto start = std::chrono::high_resolution_clock::now();
@@ -127,6 +128,8 @@ int main(int argc, char* argv[]) {
         cudaDeviceSynchronize();
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration = end - start;
+        if (i >= 10 && i < 20)
+            average_time += duration.count();
         std::cout << " Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
     }
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
@@ -171,7 +174,8 @@ int main(int argc, char* argv[]) {
                 correct_sum += O_correct[idx_O(k, x, y)];
             }
     
-    std::cout << " Check sum: " << check_sum << " Correct sum: " << correct_sum << std::endl;
+    std::cout << "Correct sum: " << correct_sum << std::endl;
+    std::cout << " Check sum: " << check_sum << " Execution time: " << std::fixed << std::setprecision(3) << average_time/10 << "ms\n";
     free(I);free(F);free(O);free(O_correct);
     cudaFree(d_workspace);
     cudnnDestroy(handle);

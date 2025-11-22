@@ -93,13 +93,16 @@ int main(int argc, char* argv[]) {
     dim3 dim_grid(H/block_x, W/block_y);
   //  compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device); 
 //    cudaDeviceSynchronize();
-
+    
+    double average_time = 0.0;
     for (int i = 0; i < 50; i++) {
         auto start = std::chrono::high_resolution_clock::now();
         compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
         cudaDeviceSynchronize();
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration = end - start;
+        if (i >= 10 && i < 20)
+            average_time += duration.count();
         std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
     }
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
@@ -141,7 +144,9 @@ int main(int argc, char* argv[]) {
                 correct_sum += O_correct[idx_O(k, x, y)];
             }
     }
-    std::cout << "Check sum: " << check_sum << " correct_sum: " << correct_sum << std::endl;
+    std::cout << " correct_sum: " << correct_sum << std::endl;
+    std::cout << "Check sum: " << check_sum << " Execution time: ";
+    std::cout << std::fixed << std::setprecision(3) << average_time/10 << "ms\n";
     free(I);free(F);free(O);free(O_correct);
     cudaFree(I_device);cudaFree(F_device);cudaFree(O_device);
 }
