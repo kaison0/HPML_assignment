@@ -13,7 +13,7 @@
 #define verbose 0
 
 #define idx_I(c, x, y) ((c) * (H+2*P) * (W+2*P) + (x) * (W+2*P) + y)
-#define idx_F(k, c, i, j) ((k) * C * FH * FW + (c) * FH * FW + (i) * FW)
+#define idx_F(k, c, i, j) ((k) * C * FH * FW + (c) * FH * FW + (i) * FW + j)
 #define idx_O(k, x, y) ((k) * H * W + (x) * W + y)
 
 __global__ void compute_convolution(double* O, double* I, double* F) {
@@ -65,8 +65,8 @@ int main(int argc, char* argv[]) {
 
     for (int k = 0; k < K; k++)
         for (int c = 0; c < C; c++)
-            for (int i = 0; i < H; i++)
-                for (int j = 0; j < W; j++)
+            for (int i = 0; i < FH; i++)
+                for (int j = 0; j < FW; j++)
                     F[idx_F(k, c, i, j)] = (double)(c + k) * (i + j);
 
     double * I_device, *F_device, *O_device;
@@ -91,17 +91,17 @@ int main(int argc, char* argv[]) {
 
     dim3 dim_block(block_x, block_y);
     dim3 dim_grid(H/block_x, W/block_y);
-    compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device); 
-    cudaDeviceSynchronize();
+  //  compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device); 
+//    cudaDeviceSynchronize();
 
-    auto start = std::chrono::high_resolution_clock::now();
-    compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
-    
-    cudaDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
-
+    for (int i = 0; i < 50; i++) {
+        auto start = std::chrono::high_resolution_clock::now();
+        compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
+        cudaDeviceSynchronize();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
+    }
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
     
     bool pass_test = true;
@@ -109,6 +109,7 @@ int main(int argc, char* argv[]) {
         for (int x = 0; x < W; x++)
             for (int y = 0; y < H;y++)
                 if (std::fabs(O_correct[idx_O(k, x, y)] - O[idx_O(k, x, y)]) > 1e-6) {
+                    if (verbose)
                     std::cout << "Element (" << k << "," << x << "," << y << ") is wrong" << std::endl;
                     pass_test = false;
                 }

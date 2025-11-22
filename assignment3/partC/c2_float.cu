@@ -23,9 +23,9 @@
 
 
 
-__global__ void compute_convolution(double* O, double* I, double* F) {
-    __shared__ double tile_I[C][block_x + 2*P][block_y + 2*P];
-    __shared__ double tile_F[K][C][FW][FH];
+__global__ void compute_convolution(float* O, float* I, float* F) {
+    __shared__ float tile_I[C][block_x + 2*P][block_y + 2*P];
+    __shared__ float tile_F[K][C][FW][FH];
     int tile_y = threadIdx.x;
     int tile_x = threadIdx.y;
 
@@ -51,7 +51,7 @@ __global__ void compute_convolution(double* O, double* I, double* F) {
 //    printf("%d %d %d\n", x, y, k);
 #pragma unroll
     for (int k = 0; k < K; k++) {
-        double value = 0.0;
+        float value = 0.0;
         for (int c = 0; c < C; c++) {
             for (int i = 0; i < FH; i++)
                 for (int j = 0; j < FW; j++)
@@ -70,18 +70,18 @@ int main(int argc, char* argv[]) {
  //       block_y = std::stoi(argv[2]);
   //      block_z = std::stoi(argv[3]);
   //  }
-    double *I, *F, *O, *O_correct;
-    long I_bytesize = (long)C*(H+2*P)*(W+2*P)* sizeof(double);
-    long F_bytesize = (long)K*C*FH*FW* sizeof(double);
-    long O_bytesize = (long)K*H*W* sizeof(double);
-    I = (double*)std::malloc(I_bytesize);
-    F = (double*)std::malloc(F_bytesize);
-    O = (double*)std::malloc(O_bytesize);
-    O_correct = (double*)std::malloc(O_bytesize);
+    float *I, *F, *O, *O_correct;
+    long I_bytesize = (long)C*(H+2*P)*(W+2*P)* sizeof(float);
+    long F_bytesize = (long)K*C*FH*FW* sizeof(float);
+    long O_bytesize = (long)K*H*W* sizeof(float);
+    I = (float*)std::malloc(I_bytesize);
+    F = (float*)std::malloc(F_bytesize);
+    O = (float*)std::malloc(O_bytesize);
+    O_correct = (float*)std::malloc(O_bytesize);
     for (int c = 0; c < C; c++)
         for (int h = 0; h < H; h++)
             for (int w = 0; w < W; w++)
-                I[idx_I(c, h+1 ,w+1)] = (double)c * (h + w);
+                I[idx_I(c, h+1 ,w+1)] = (float)c * (h + w);
     for (int c = 0; c < C; c++) {
         for (int h = 0; h < H + 2*P; h++) {
             I[idx_I(c, h, 0)] = 0.0;
@@ -97,9 +97,9 @@ int main(int argc, char* argv[]) {
         for (int c = 0; c < C; c++)
             for (int i = 0; i < FH; i++)
                 for (int j = 0; j < FW; j++)
-                    F[idx_F(k, c, i, j)] = (double)(c + k) * (i + j);
+                    F[idx_F(k, c, i, j)] = (float)(c + k) * (i + j);
 
-    double * I_device, *F_device, *O_device;
+    float * I_device, *F_device, *O_device;
     cudaMalloc(&I_device, I_bytesize);
     cudaMalloc(&F_device, F_bytesize);
     cudaMalloc(&O_device, O_bytesize);
@@ -120,15 +120,14 @@ int main(int argc, char* argv[]) {
     
     dim3 dim_block(block_x, block_y);
     dim3 dim_grid(H/block_x, W/block_y);
-  //  compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
- //   cudaDeviceSynchronize();
-
+//    compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
+//    cudaDeviceSynchronize();
     for (int i = 0; i < 50; i++) {
         auto start = std::chrono::high_resolution_clock::now();
         compute_convolution<<<dim_grid, dim_block>>>(O_device, I_device, F_device);
         cudaDeviceSynchronize();
         auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> duration = end - start;
+        std::chrono::duration<float, std::milli> duration = end - start;
         std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
     }
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);

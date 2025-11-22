@@ -20,7 +20,7 @@
 #define block_z 1 
 
 #define idx_I(c, x, y) ((c) * (H) * (W) + (x) * (W) + y)
-#define idx_F(k, c, i, j) ((k) * C * FH * FW + (c) * FH * FW + (i) * FW)
+#define idx_F(k, c, i, j) ((k) * C * FH * FW + (c) * FH * FW + (i) * FW + j)
 #define idx_O(k, x, y) ((k) * H * W + (x) * W + y)
 
 
@@ -47,8 +47,8 @@ int main(int argc, char* argv[]) {
 
     for (int k = 0; k < K; k++)
         for (int c = 0; c < C; c++)
-            for (int i = 0; i < H; i++)
-                for (int j = 0; j < W; j++)
+            for (int i = 0; i < FH; i++)
+                for (int j = 0; j < FW; j++)
                     F[idx_F(k, c, i, j)] = (double)(c + k) * (i + j);
 
     double * I_device, *F_device, *O_device;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
 
     cudaMemcpy(I_device, I, I_bytesize, cudaMemcpyHostToDevice);
     cudaMemcpy(F_device, F, F_bytesize, cudaMemcpyHostToDevice);
-    cudaMemcpy(O_device, O, O_bytesize, cudaMemcpyHostToDevice);
+    cudaMemset(O_device, 0, O_bytesize);
 
     for (int k = 0; k < K; k++)
         for (int x = 0; x < W; x++)
@@ -67,9 +67,15 @@ int main(int argc, char* argv[]) {
                 for (int c = 0; c < C; c++)
                     for (int j = 0; j < FH; j++)
                         for (int i = 0; i < FW; i++)
-                            O_correct[idx_O(k, x, y)] += F[idx_F(k, c, FW - 1 - i, FH - 1 - j)] * I[idx_I(c, x + i, y + j)];
+                        {
+                            int ix = x + i - P, iy = y + j - P;
+                            if (ix >= 0 && ix < W && iy >= 0 && iy < H) {
+                                O_correct[idx_O(k, x, y)] += F[idx_F(k, c, FW - 1 - i, FH - 1 - j)] * I[idx_I(c, ix, iy)];
+                            }
+                        
+                        }
             }
-    printf("before cudnn");   
+
     cudnnHandle_t handle;
     cudnnCreate(&handle);
 
@@ -101,7 +107,6 @@ int main(int argc, char* argv[]) {
         perf_results);
 
     cudnnConvolutionFwdAlgo_t algo = perf_results[0].algo;
-    // ---------------------------------------------------
 
     size_t ws_size = 0;
     cudnnGetConvolutionForwardWorkspaceSize(
@@ -110,18 +115,20 @@ int main(int argc, char* argv[]) {
         &ws_size);
    
     void *d_workspace = nullptr;
-    printf("workspace size %d", ws_size);
+    printf("workspace size %d\n", ws_size);
     cudaMalloc(&d_workspace, ws_size);
 
-    float alpha = 1.0f;
-    float beta  = 0.0f;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algo, d_workspace, ws_size, &beta, output_desc, O_device);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "Block_size: (" << block_x << ", " << block_y << ") Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
-
+    double alpha = 1.0;
+    double beta  = 0.0;
+ //   cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algo, d_workspace, ws_size, &beta, output_desc, O_device);
+    for (int i = 0; i < 50; i++) {
+        auto start = std::chrono::high_resolution_clock::now();
+        cudnnConvolutionForward(handle, &alpha, input_desc, I_device, filter_desc, F_device, conv_desc, algo, d_workspace, ws_size, &beta, output_desc, O_device);
+        cudaDeviceSynchronize();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << " Kernel Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
+    }
     cudaMemcpy(O, O_device, O_bytesize, cudaMemcpyDeviceToHost);
     
     bool pass_test = true;
