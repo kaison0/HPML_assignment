@@ -32,5 +32,5 @@ int main(int argc, char *argv[]) {
     free(b);
     free(c);
     std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "K: " << k <<  " Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
+    std::cout << "K: " << k <<  " Compute Running Time: " << std::fixed << std::setprecision(5) << duration.count() << "ms\n";
 }
